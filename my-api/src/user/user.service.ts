@@ -4,6 +4,7 @@ import { NotFoundException } from '@nestjs/common';
 import { UpdateUserDto } from 'src/user/dto/update-user.dto'; 
 import * as bcrypt from 'bcrypt';
 import { RefreshTokenDto } from 'src/auth/dto/refresh-token.dto';
+import { ConflictException } from '@nestjs/common';
 
 
 @Injectable()
@@ -17,9 +18,10 @@ async getProfile(userId:string){
 
 
  const user =
- await this.prisma.user.findUnique({
+ await this.prisma.user.findFirst({
     where:{
-      id:userId
+      id:userId,
+      isDelete:false
     }
  });
 
@@ -37,6 +39,32 @@ async updateProfile(
   userId:string,
   data:UpdateUserDto
 ){
+
+  const existingUser = await this.prisma.user.findFirst({
+    where:{
+      id:userId,
+      isDelete:false
+    }
+  });
+
+  if(!existingUser){
+    throw new NotFoundException("User not found");
+  }
+
+  if (data.phoneNumber) {
+  const phoneOwner = await this.prisma.user.findUnique({
+    where: {
+      phoneNumber: data.phoneNumber
+    }
+  });
+
+  if (phoneOwner && phoneOwner.id !== userId) {
+    throw new ConflictException(
+      "Phone number already exists"
+      );
+    }
+  }
+
 
   const user = await this.prisma.user.update({
 
@@ -63,7 +91,12 @@ async updateProfile(
 
 }
   async changePassword(userId:string,oldPassword:string,newPassword:string){
-    const user = await this.prisma.user.findUnique({where:{id:userId}});
+    const user = await this.prisma.user.findFirst({
+      where:{
+        id:userId,
+        isDelete:false
+      }
+    });
     
     if(!user){
       throw new NotFoundException("User not found");}
@@ -90,9 +123,10 @@ async updateProfile(
 
   async deleteAccount(userId:string){
 
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findFirst({
         where:{
-            id:userId
+            id:userId,
+            isDelete:false
         }
     });
 

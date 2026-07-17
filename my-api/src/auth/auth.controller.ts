@@ -16,15 +16,14 @@ export class AuthController {
         return this.authService.register(
             data.email, 
             data.password,
-            data.phoneNumber
+            data.phoneNumber,
+            data.username
         );
 
     }
 
     @Public()
-    @Post('login')login(
-        @Body() data:LoginDto
-    ){
+    @Post('login')login(@Body() data:LoginDto){
 
         return this.authService.login(
         data.email,

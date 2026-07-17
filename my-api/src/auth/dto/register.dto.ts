@@ -18,7 +18,8 @@ export class RegisterDto {
  @IsPhoneNumber('CN')
  phoneNumber!:string;
 
-
+@IsString()
+username!: string;
 
 
 
