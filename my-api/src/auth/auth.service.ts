@@ -59,15 +59,17 @@ export class AuthService {
       throw new UnauthorizedException("User not found");
     }
 
+    if (user.isDelete) {
+      throw new UnauthorizedException('User has been deleted');
+    }
+
     const passwordMatch = await bcrypt.compare(password,user.passwordHash);
 
     if(!passwordMatch){
       throw new UnauthorizedException("Password incorrect")
     }
     
-    if (user.isDelete) {
-      throw new UnauthorizedException('User has been deleted');
-    }
+    
       
     
   const payload = {sub:user.id,email:user.email};

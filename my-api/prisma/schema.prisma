@@ -23,5 +23,5 @@ model User {
   deleteAt     DateTime?
   updatedAt    DateTime  @updatedAt
   createdAt    DateTime  @default(now())
-  isDelete     Boolean?
+  isDelete Boolean @default(false)
 }

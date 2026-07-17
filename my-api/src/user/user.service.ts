@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotFoundException } from '@nestjs/common';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserDto } from 'src/user/dto/update-user.dto'; 
 import * as bcrypt from 'bcrypt';
 import { RefreshTokenDto } from 'src/auth/dto/refresh-token.dto';
 
