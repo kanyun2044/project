@@ -8,20 +8,13 @@ import { IS_PUBLIC_KEY } from './public.decorator';
 export class JwtAuthGuard implements CanActivate {
 
 
-constructor(
-    private jwtService: JwtService,
-    private reflector: Reflector
-){}
+constructor(private jwtService: JwtService,private reflector: Reflector){}
 
 
-async canActivate(
-    context:ExecutionContext
-):Promise<boolean>{
+async canActivate(context:ExecutionContext):Promise<boolean>{
 
 
-    const isPublic =
-    this.reflector.getAllAndOverride<boolean>(
-        IS_PUBLIC_KEY,
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY,
         [
             context.getHandler(),
             context.getClass()
@@ -34,12 +27,10 @@ async canActivate(
     }
 
 
-    const request =
-    context.switchToHttp().getRequest();
+    const request =context.switchToHttp().getRequest();
 
 
-    const authHeader =
-    request.headers.authorization;
+    const authHeader = request.headers.authorization;
 
 
     if(!authHeader){
@@ -49,8 +40,14 @@ async canActivate(
     }
 
 
-    const token =
-    authHeader.split(' ')[1];
+    const [type, token] = authHeader.split(' ');
+
+    if(type !== 'Bearer' || !token){
+        
+        throw new UnauthorizedException(
+        "Invalid authorization format"
+    );
+}
 
 
     try{
