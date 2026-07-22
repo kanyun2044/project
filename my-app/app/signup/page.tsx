@@ -15,15 +15,18 @@ import DialogTitle from '@mui/material/DialogTitle';
 export default function ColorTextFields() {
 //作为输入框进行输入
 
-    const testemail="123456@qq.com";
+    
 
 
     const[Email,setEmail] = React.useState("");
     const[Password,setPassword] = React.useState("");
     const[Password2,setPassword2] = React.useState("");
     const[Message,setMessage] = React.useState("");
+    const [Username, setUsername] = React.useState("");
+    const [PhoneNumber, setPhoneNumber] = React.useState("");
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const router = useRouter();
+
 
 
     const [open, setOpen] = React.useState(false);
@@ -35,32 +38,82 @@ export default function ColorTextFields() {
     };
 
     
-    function dealsignup (){
+    async function dealsignup() {
+      if (Email === "") {
+        setMessage("Email can't be empty.");
+        return;
+      }
 
-        if(Email =="")
-        setMessage("Email can't be empty.")
+      if (!emailRegex.test(Email)) {
+        setMessage("Invalid email format");
+        return;
+      }
 
-        else if (!emailRegex.test(Email))
-        setMessage("Invalid email format")
+      if (Username === "") {
+        setMessage("Username can't be empty");
+        return;
+      }
 
-        else if(Password =="") 
-        setMessage("Password can't be empty")
-      
-        else if(Password2=="")
-        setMessage("Please confirm your password")
+      if (PhoneNumber === "") {
+        setMessage("Phone number can't be empty");
+        return;
+      }
 
-        else if(Password!=Password2)
-        setMessage("Passwords do not match ")
+      if (Password === "") {
+        setMessage("Password can't be empty");
+        return;
+      }
 
-        else if (testemail == Email)
-        setMessage("Email already exist")
+      if (Password.length < 6) {
+        setMessage("Password must contain at least 6 characters");
+        return;
+      }
 
-        else{
-        setMessage("Registration successful")
-        handleClickOpen()}
-        
-    };
+      if (Password2 === "") {
+        setMessage("Please confirm your password");
+        return;
+      }
 
+      if (Password !== Password2) {
+        setMessage("Passwords do not match");
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/auth/register`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+        },
+          body: JSON.stringify({
+            email: Email,
+            username: Username,
+            phoneNumber: PhoneNumber,
+            password: Password,
+            confirmPassword: Password2,
+        }),
+      },
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      const errorMessage = Array.isArray(data.message)
+        ? data.message.join(", ")
+        : data.message;
+
+      setMessage(errorMessage || "Registration failed");
+      return;
+    }
+
+    setMessage("Registration successful");
+    handleClickOpen();
+  } catch {
+    setMessage("Unable to connect to the server");
+  }
+}
 
 
   return (
@@ -82,6 +135,23 @@ export default function ColorTextFields() {
       {Message}
     </Typography>
 
+    
+
+    <TextField
+      label="Username"
+      value={Username}
+      color="primary"
+      focused
+      onChange={(e) => setUsername(e.target.value)}
+    />
+
+    <TextField
+      label="Phone Number"
+      value={PhoneNumber}
+      color="primary"
+      focused
+      onChange={(e) => setPhoneNumber(e.target.value)}
+    />
 
     <TextField label="Email" value={Email} color="secondary" focused 
       onChange={(e) => setEmail(e.target.value)}
@@ -113,7 +183,7 @@ export default function ColorTextFields() {
          
       <Typography variant="body1">
         Already have an account. {""}
-        <Link href=" /login" style={{color:"red" }}>Login</Link>      
+        <Link href="/login" style={{color:"red" }}>Login</Link>
       </Typography>
 
       <Typography variant="body2" align="center" >     

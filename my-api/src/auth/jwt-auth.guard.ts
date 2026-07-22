@@ -30,24 +30,50 @@ async canActivate(context:ExecutionContext):Promise<boolean>{
     const request =context.switchToHttp().getRequest();
 
 
+
+
+
     const authHeader = request.headers.authorization;
 
 
-    if(!authHeader){
+    let token = "";
+
+
+    if(authHeader){
+
+    const [type, bearerToken] =
+    authHeader.split(' ');
+
+
+    if(type !== 'Bearer' || !bearerToken){
+
         throw new UnauthorizedException(
-            "Missing token"
+            "Invalid authorization format"
         );
+
     }
 
 
-    const [type, token] = authHeader.split(' ');
+    token = bearerToken;
 
-    if(type !== 'Bearer' || !token){
-        
+    }
+    else{
+
+        token =
+        request.cookies?.access_token;
+
+    }
+
+
+    if(!token){
+
         throw new UnauthorizedException(
-        "Invalid authorization format"
-    );
-}
+            "Missing token"
+        );
+
+    }
+
+
 
 
     try{

@@ -1,6 +1,6 @@
 "use client"
 import * as React from 'react';
-import { Box, Button, TextField, Typography,Alert,Stack, CircularProgress, Backdrop } from "@mui/material";
+import { Box, Button, TextField, Typography,Alert,Stack, CircularProgress, Backdrop,Snackbar} from "@mui/material";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -8,43 +8,82 @@ import { useRouter } from "next/navigation";
 
 export default function ColorTextFields() {
 
-    const testemail="123456@qq.com";
-    const testpassword ="123456";
+
 
     const[Email,setEmail] = React.useState("");
     const[Password,setPassword] = React.useState("");
     const[Message,setMessage] = React.useState("");
+    const [openSnackbar, setOpenSnackbar] = React.useState(false);
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const router = useRouter();
 
-    function deallogin (){
-        if(Email =="")
-        setMessage("Email can't be empty.")
+    async function deallogin() {
+      if (Email === "") {
+        setMessage("Email can't be empty.");
+        return;
+      }
 
-        else if (!emailRegex.test(Email))
-        setMessage("Invalid email format")
+      if (!emailRegex.test(Email)) {
+        setMessage("Invalid email format");
+        return;
+      }
 
-        else if(Password =="")
-        setMessage("Password can't be empty")
+      if (Password === "") {
+        setMessage("Password can't be empty");
+        return;
+      }
 
-        
+      if (Password.length < 6) {
+        setMessage("Password must contain at least 6 characters");
+        return;
+      }
 
-        else if (Email!=testemail)
-        setMessage("User email does not exist")
+      try {
+        const response = await fetch(
+         `${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: {
+            "Content-Type": "application/json",
+          },
+            body: JSON.stringify({
+            email: Email,
+            password: Password,
+        }),
+      },
+    );
 
-        else if (Password!=testpassword)
-        setMessage("Password is not correct")
+    const data = await response.json();
 
-        else{
-        setMessage("Login successful")
-        router.push("/homeTest");
-        }
-    };
+    if (!response.ok) {
+      const errorMessage = Array.isArray(data.message)
+        ? data.message.join(", ")
+        : data.message;
+
+      setMessage(errorMessage || "Login failed");
+      return;
+    }
+
+    
+
+    setMessage("");
+    setOpenSnackbar(true);
+
+    setTimeout(() => {
+    router.push("/homeTest");
+    }, 2000);
+  } catch {
+    setMessage("Unable to connect to the server");
+  }
+}
 
   
    
 
     return (
+
+      
     
         <Box
             component="form"
@@ -59,6 +98,23 @@ export default function ColorTextFields() {
             noValidate
             autoComplete="off"
         >
+          <Snackbar
+            open={openSnackbar}
+            autoHideDuration={2000}
+            onClose={() => setOpenSnackbar(false)}
+            anchorOrigin={{
+            vertical: "top",
+            horizontal: "center",
+          }}
+          >
+          <Alert
+              severity="success"
+              variant="filled"
+             onClose={() => setOpenSnackbar(false)}
+          >
+          Login successful
+          </Alert>
+        </Snackbar>
 
         <Typography variant="body2" color="warning" align="center" >
         {Message}
@@ -83,7 +139,7 @@ export default function ColorTextFields() {
         </Button>
 
         <Typography variant="body2" align="center" >
-            Don't have an account?{""}
+              {"Don't have an account?"}
         <Link href="/signup" style={{color : "red"}}> Sign up</Link>
          </Typography>
 

@@ -1,4 +1,5 @@
-import {IsEmail,IsString,MinLength,IsOptional, IsPhoneNumber} from 'class-validator';
+import {IsEmail,IsString,MinLength,IsOptional, IsPhoneNumber,Matches} from 'class-validator';
+import { Match } from '../../common/validators/match.decorator';
 
 
 export class RegisterDto {
@@ -21,6 +22,11 @@ export class RegisterDto {
 @IsString()
 username!: string;
 
-
+@IsString()
+@MinLength(6)
+@Match('password', {
+  message: 'confirmPassword must match password'
+})
+confirmPassword!: string;
 
 }

@@ -4,7 +4,7 @@ import { NotFoundException } from '@nestjs/common';
 import { UpdateUserDto } from 'src/user/dto/update-user.dto'; 
 import * as bcrypt from 'bcrypt';
 import { RefreshTokenDto } from 'src/auth/dto/refresh-token.dto';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException,BadRequestException } from '@nestjs/common';
 
 
 @Injectable()
@@ -105,6 +105,12 @@ async updateProfile(
 
     if(!match){
       throw new UnauthorizedException("old password Incorrect")
+    }
+
+    if (oldPassword === newPassword) {
+      throw new BadRequestException(
+      "New password cannot be the same as old password",
+      );
     }
 
     const hashPassword = await bcrypt.hash(newPassword,10);
