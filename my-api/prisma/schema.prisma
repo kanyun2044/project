@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,14 +9,48 @@ datasource db {
 
 model User {
   id           String    @id @default(uuid())
-  username     String
   email        String    @unique
   passwordHash String
   phoneNumber  String    @unique
   avatar       String?
-  refreshToken String?
-  deleteAt     DateTime?
-  updatedAt    DateTime  @updatedAt
   createdAt    DateTime  @default(now())
-  isDelete Boolean @default(false)
+  deleteAt     DateTime?
+  isDelete     Boolean   @default(false)
+  refreshToken String?
+  updatedAt    DateTime  @updatedAt
+  username     String
+
+  chatSessions ChatSession[]
+  chatMessages ChatMessage[]
+}
+
+model ChatSession {
+  id        String        @id @default(uuid())
+  title     String
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([userId, updatedAt])
+}
+
+model ChatMessage {
+  id        String      @id @default(uuid())
+  role      ChatRole
+  content   String
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId, createdAt])
+  @@index([userId, createdAt])
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
 }
