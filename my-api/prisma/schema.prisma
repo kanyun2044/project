@@ -45,9 +45,23 @@ model ChatMessage {
   userId    String
   user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime    @default(now())
+  attachments ChatAttachment[]
 
   @@index([sessionId, createdAt])
   @@index([userId, createdAt])
+}
+
+model ChatAttachment {
+  id        String      @id @default(uuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  fileName  String
+  fileUrl   String
+  mimeType  String
+  fileSize  Int
+  createdAt DateTime    @default(now())
+
+  @@index([messageId])
 }
 
 enum ChatRole {

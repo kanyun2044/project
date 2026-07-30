@@ -1,4 +1,6 @@
-import { Body,Controller,Delete,Get,Param,Patch,Post,Req } from '@nestjs/common';
+import { Body,Controller,Delete,Get,Param,Patch,Post,Req,UploadedFile,UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
 import { ChatService } from './chat.service';
 import { CreateChatSessionDto } from './dto/create-chat-session.dto';
 import { SendChatMessageDto } from './dto/send-chat-message.dto';
@@ -21,6 +23,25 @@ export class ChatController {
             request.user.sub,
             data
         );
+    }
+
+    @Post('upload')
+    @UseInterceptors(FileInterceptor('file',{
+        storage:diskStorage({
+            destination:'public/uploads/chat',
+            filename:(req,file,callback) => {
+                const uniqueName = `${Date.now()}-${file.originalname}`;
+                callback(null,uniqueName);
+            }
+        })
+    }))
+    uploadFile(@UploadedFile() file:Express.Multer.File){
+        return {
+            fileName:file.originalname,
+            fileUrl:`/uploads/chat/${file.filename}`,
+            mimeType:file.mimetype,
+            fileSize:file.size
+        };
     }
 
     @Patch(':id')
@@ -61,7 +82,7 @@ export class ChatController {
         return this.chatService.sendMessage(
             request.user.sub,
             id,
-            data.content
+            data
         );
     }
 }

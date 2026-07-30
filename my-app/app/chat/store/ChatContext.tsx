@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChatMessage, ChatSession } from "../types";
+import { ChatAttachment, ChatMessage, ChatSession } from "../types";
 import { apiFetch } from "../../lib/api";
 
 type ChatContextValue = {
@@ -14,8 +14,9 @@ type ChatContextValue = {
   createSession: (title?: string) => Promise<void>;
   selectSession: (id: string) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, attachments?: ChatAttachment[]) => Promise<void>;
   clearError: () => void;
+  retryMessage: (messageId: string) => Promise<void>;
   
 };
 
@@ -97,6 +98,36 @@ async function loadSessions() {
   loadSessions();
 }, []);
 
+
+    async function retryMessage(messageId: string) {
+  const session = activeSession;
+  if (!session || isGenerating) return;
+
+  const failedMessage = session.messages.find(
+    (message) => message.id === messageId,
+  );
+
+  if (!failedMessage || failedMessage.role !== "user") return;
+
+  setSessions((prev) =>
+    prev.map((item) =>
+      item.id === session.id
+        ? {
+            ...item,
+            messages: item.messages.filter(
+              (message) =>
+                message.id !== messageId && message.status !== "error",
+            ),
+          }
+        : item,
+    ),
+  );
+
+  await sendMessage(failedMessage.content);
+}
+
+
+
 async function createSession(title?: string) {
   const customTitle = title?.trim();
 
@@ -138,6 +169,7 @@ function normalizeMessage(message: any): ChatMessage {
     content: message.content,
     createdAt: message.createdAt,
     status: "done",
+    attachments: message.attachments ?? [],
   };
 }
 
@@ -217,16 +249,17 @@ function normalizeSession(session: any): ChatSession {
   }
 }
 
- async function sendMessage(content: string) {
+ async function sendMessage(content: string, attachments: ChatAttachment[] = []) {
   const text = content.trim();
-  if (!text || isGenerating) return;
+  if ((!text && attachments.length === 0) || isGenerating) return;
 
   setIsGenerating(true);
   setErrorMessage("");
+  let sessionId = activeSessionId;
+  let tempUserMessage: ChatMessage | null = null;
+  let tempAssistantMessage: ChatMessage | null = null;
 
   try {
-    let sessionId = activeSessionId;
-
     if (!sessionId) {
       const createResponse = await apiFetch("/chats", {
         method: "POST",
@@ -234,7 +267,7 @@ function normalizeSession(session: any): ChatSession {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          title: text.slice(0, 18),
+          title: text ? text.slice(0, 18) : "File upload",
         }),
       });
 
@@ -256,21 +289,25 @@ function normalizeSession(session: any): ChatSession {
 
     const now = new Date().toISOString();
 
-    const tempUserMessage: ChatMessage = {
+    tempUserMessage = {
       id: createId(),
       role: "user",
       content: text,
       createdAt: now,
       status: "done",
+      attachments,
     };
 
-    const tempAssistantMessage: ChatMessage = {
+    tempAssistantMessage = {
       id: createId(),
       role: "assistant",
       content: "",
       createdAt: now,
       status: "loading",
     };
+
+    const userDraftMessage = tempUserMessage;
+    const assistantDraftMessage = tempAssistantMessage;
 
     setSessions((prev) =>
       prev.map((session) =>
@@ -280,8 +317,8 @@ function normalizeSession(session: any): ChatSession {
               updatedAt: now,
               messages: [
                 ...session.messages,
-                tempUserMessage,
-                tempAssistantMessage,
+                userDraftMessage,
+                assistantDraftMessage,
               ],
             }
           : session,
@@ -295,6 +332,7 @@ function normalizeSession(session: any): ChatSession {
       },
       body: JSON.stringify({
         content: text,
+        attachments,
       }),
     });
 
@@ -313,11 +351,11 @@ function normalizeSession(session: any): ChatSession {
           ? {
               ...session,
               messages: session.messages.map((message) =>
-                message.id === tempUserMessage.id
+                message.id === userDraftMessage.id
                   ? userMessage
-                  : message.id === tempAssistantMessage.id
+                  : message.id === assistantDraftMessage.id
                     ? {
-                        ...tempAssistantMessage,
+                        ...assistantDraftMessage,
                         content: "",
                       }
                     : message,
@@ -337,7 +375,7 @@ function normalizeSession(session: any): ChatSession {
                 ...session,
                 updatedAt: new Date().toISOString(),
                 messages: session.messages.map((message) =>
-                  message.id === tempAssistantMessage.id
+                  message.id === assistantDraftMessage.id
                     ? {
                         ...message,
                         content: message.content + char,
@@ -360,7 +398,7 @@ function normalizeSession(session: any): ChatSession {
                   ? text.slice(0, 18)
                   : session.title,
               messages: session.messages.map((message) =>
-                message.id === tempAssistantMessage.id
+                message.id === assistantDraftMessage.id
                   ? {
                       ...assistantMessage,
                       status: "done",
@@ -373,6 +411,32 @@ function normalizeSession(session: any): ChatSession {
     );
   } catch {
     setErrorMessage("Send message failed, please try again later.");
+
+    if (sessionId && tempUserMessage && tempAssistantMessage) {
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                messages: session.messages.map((message) =>
+                  message.id === tempUserMessage?.id
+                    ? {
+                        ...message,
+                        status: "error",
+                      }
+                    : message.id === tempAssistantMessage?.id
+                      ? {
+                          ...message,
+                          content: "Message failed.",
+                          status: "error",
+                        }
+                      : message,
+                ),
+              }
+            : session,
+        ),
+      );
+    }
   } finally {
     setIsGenerating(false);
   }
@@ -392,6 +456,7 @@ function normalizeSession(session: any): ChatSession {
         deleteSession,
         sendMessage,
         clearError: () => setErrorMessage(""),
+        retryMessage 
       }}
     >
       {children}

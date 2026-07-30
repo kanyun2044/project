@@ -2,8 +2,11 @@ import { Injectable,NotFoundException } from '@nestjs/common';
 import { ChatRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateChatSessionDto } from './dto/create-chat-session.dto';
+import { SendChatMessageDto } from './dto/send-chat-message.dto';
 import { UpdateChatSessionDto } from './dto/update-chat-session.dto';
 import OpenAI from 'openai';
+import * as fs from 'fs';
+import { join } from 'path';
 
 
 @Injectable()
@@ -112,6 +115,9 @@ export class ChatService {
             },
             orderBy:{
                 createdAt:'asc'
+            },
+            include:{
+                attachments:true
             }
         });
 
@@ -121,7 +127,7 @@ export class ChatService {
     async sendMessage(
         userId:string,
         sessionId:string,
-        content:string
+        data:SendChatMessageDto
     ){
 
         const session =
@@ -130,7 +136,7 @@ export class ChatService {
             sessionId
         );
 
-        const text = content.trim();
+        const text = data.content.trim();
 
         const userMessage =
         await this.prisma.chatMessage.create({
@@ -138,7 +144,15 @@ export class ChatService {
                 userId,
                 sessionId,
                 role:ChatRole.USER,
-                content:text
+                content:text,
+                attachments:data.attachments?.length
+                ? {
+                    create:data.attachments
+                }
+                : undefined
+            },
+            include:{
+                attachments:true
             }
         });
 
@@ -154,7 +168,8 @@ export class ChatService {
         });
 
         const answer = await this.createAiAnswer(
-            contextMessages.reverse()
+            contextMessages.reverse(),
+            userMessage.attachments
         );
 
         const assistantMessage =
@@ -164,6 +179,9 @@ export class ChatService {
                 sessionId,
                 role:ChatRole.ASSISTANT,
                 content:answer
+            },
+            include:{
+                attachments:true
             }
         });
 
@@ -219,17 +237,60 @@ export class ChatService {
 
 
     private async createAiAnswer(
-        messages:{role:ChatRole;content:string}[]
+        messages:{role:ChatRole;content:string}[],
+        attachments:{fileUrl:string}[] = []
     ){
+
+    const fileInputs =
+    await Promise.all(
+        attachments.map(async (attachment) => {
+            const filePath = join(
+                process.cwd(),
+                'public',
+                attachment.fileUrl.replace(/^\/uploads\//,'uploads/')
+            );
+
+            const uploadedFile =
+            await this.openai.files.create({
+                file:fs.createReadStream(filePath),
+                purpose:'user_data'
+            });
+
+            return {
+                type:'input_file',
+                file_id:uploadedFile.id
+            };
+        })
+    );
+
+    const input = messages.map((message,index) => {
+        const isLastMessage = index === messages.length - 1;
+        const role = message.role === ChatRole.USER
+        ? 'user'
+        : 'assistant';
+
+        if(!isLastMessage || message.role !== ChatRole.USER || fileInputs.length === 0){
+            return {
+                role,
+                content:message.content
+            };
+        }
+
+        return {
+            role,
+            content:[
+                {
+                    type:'input_text',
+                    text:message.content
+                },
+                ...fileInputs
+            ]
+        };
+    });
 
     const response = await this.openai.responses.create({
         model:'gpt-4.1-mini',
-        input:messages.map((message) => ({
-            role:message.role === ChatRole.USER
-            ? 'user'
-            : 'assistant',
-            content:message.content
-        }))
+        input:input as any
     });
 
     return response.output_text || 'No response';

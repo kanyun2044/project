@@ -9,6 +9,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import SearchIcon from "@mui/icons-material/Search";
 import { useRouter } from "next/navigation";
 import { useChat } from "../store/ChatContext";
+import ClearIcon from "@mui/icons-material/Clear";
 
 type Props = {
   onClose?: () => void;
@@ -134,6 +135,15 @@ export default function ChatSidebar({ onClose }: Props) {
           onChange={(event) => setSearchKeyword(event.target.value)}
           InputProps={{
             startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
+            endAdornment: searchKeyword ? (
+          <IconButton
+            size="small"
+            onClick={() => setSearchKeyword("")}
+            edge="end"
+        >
+          <ClearIcon fontSize="small" />
+          </IconButton>
+          ) : null,
           }}
         />
       </Box>
