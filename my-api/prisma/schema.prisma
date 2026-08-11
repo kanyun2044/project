@@ -22,6 +22,7 @@ model User {
 
   chatSessions ChatSession[]
   chatMessages ChatMessage[]
+  orders       Order[]
 }
 
 model ChatSession {
@@ -30,6 +31,7 @@ model ChatSession {
   userId    String
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages  ChatMessage[]
+  orders    Order[]
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -67,4 +69,45 @@ model ChatAttachment {
 enum ChatRole {
   USER
   ASSISTANT
+}
+
+model Order {
+  id             String        @id @default(uuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatSessionId  String?
+  chatSession    ChatSession?  @relation(fields: [chatSessionId], references: [id], onDelete: SetNull)
+  orderNo        String        @unique
+  type           OrderType
+  status         OrderStatus   @default(PENDING_CONFIRM)
+  totalAmount    Decimal       @db.Decimal(12, 2)
+  bookingDetails Json
+  paymentMethod  String?
+  paymentNo      String?
+  confirmedAt    DateTime?
+  paidAt         DateTime?
+  canceledAt     DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deleteAt       DateTime?
+  isDelete       Boolean       @default(false)
+
+  @@index([userId, createdAt])
+  @@index([chatSessionId])
+  @@index([orderNo])
+  @@index([status])
+}
+
+enum OrderType {
+  FLIGHT
+  HOTEL
+}
+
+enum OrderStatus {
+  PENDING_CONFIRM
+  PENDING_PAYMENT
+  PAID
+  CANCELED
+  COMPLETED
 }

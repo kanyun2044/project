@@ -7,10 +7,11 @@ import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { ChatModule } from './chat/chat.module';
+import { OrderModule } from './order/order.module';
 
 
 @Module({
-  imports: [PrismaModule,AuthModule,UserModule,ChatModule],
+  imports: [PrismaModule,AuthModule,UserModule,ChatModule,OrderModule],
 
   controllers: [AppController],
 
