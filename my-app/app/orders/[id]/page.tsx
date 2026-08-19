@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Alert,Box,Button,Card,CardContent,Chip,CircularProgress,Dialog,DialogActions,DialogContent,DialogTitle,Divider,Snackbar,Stack,Typography } from "@mui/material";
+import { Alert,Backdrop,Box,Button,Card,CardContent,Chip,CircularProgress,Divider,Paper,Snackbar,Stack,Typography } from "@mui/material";
 import { Timeline,TimelineConnector,TimelineContent,TimelineDot,TimelineItem,TimelineSeparator } from "@mui/lab";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useParams, useRouter } from "next/navigation";
@@ -32,12 +32,32 @@ export default function OrderDetailPage() {
     loadOrder();
   }, [params.id]);
 
+  React.useEffect(() => {
+    function syncOrder() {
+      if (document.visibilityState === "visible") {
+        loadOrder(false);
+      }
+    }
+
+    window.addEventListener("focus", syncOrder);
+    window.addEventListener("pageshow", syncOrder);
+    document.addEventListener("visibilitychange", syncOrder);
+
+    return () => {
+      window.removeEventListener("focus", syncOrder);
+      window.removeEventListener("pageshow", syncOrder);
+      document.removeEventListener("visibilitychange", syncOrder);
+    };
+  }, [params.id]);
+
   async function checkLogin() {
     await apiFetch("/users/me");
   }
 
-  async function loadOrder() {
-    setLoading(true);
+  async function loadOrder(showLoading = true) {
+    if (showLoading) {
+      setLoading(true);
+    }
 
     try {
       const response = await apiFetch(`/orders/${params.id}`);
@@ -51,7 +71,9 @@ export default function OrderDetailPage() {
     } catch {
       setMessage("Unable to connect to the server");
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   }
 
@@ -368,20 +390,38 @@ export default function OrderDetailPage() {
         </Stack>
       </Box>
 
-      <Dialog open={cancelDialogOpen} onClose={() => setCancelDialogOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Cancel order?</DialogTitle>
-        <DialogContent>
-          <Typography color="text.secondary">
+      <Backdrop
+        open={cancelDialogOpen}
+        sx={{
+          zIndex: 1300,
+          px: 2,
+        }}
+        onClick={() => setCancelDialogOpen(false)}
+      >
+        <Paper
+          elevation={8}
+          sx={{
+            width: "100%",
+            maxWidth: 420,
+            p: 3,
+            borderRadius: 2,
+          }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <Typography fontWeight={700} fontSize={18} sx={{ mb: 1 }}>
+            Cancel order?
+          </Typography>
+          <Typography color="text.secondary" sx={{ mb: 3 }}>
             Are you sure you want to cancel this order?
           </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCancelDialogOpen(false)}>No</Button>
-          <Button color="error" variant="contained" onClick={handleConfirmCancel}>
-            Yes, cancel
-          </Button>
-        </DialogActions>
-      </Dialog>
+          <Stack direction="row" spacing={1} justifyContent="flex-end">
+            <Button onClick={() => setCancelDialogOpen(false)}>No</Button>
+            <Button color="error" variant="contained" onClick={handleConfirmCancel}>
+              Yes, cancel
+            </Button>
+          </Stack>
+        </Paper>
+      </Backdrop>
 
       <Snackbar open={Boolean(message)} autoHideDuration={3000} onClose={() => setMessage("")}>
         <Alert severity="info" variant="filled" onClose={() => setMessage("")}>

@@ -1,5 +1,5 @@
 import { BadRequestException,Injectable,NotFoundException } from '@nestjs/common';
-import { OrderStatus,Prisma } from '@prisma/client';
+import { ChatRole,OrderStatus,OrderType,Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
@@ -79,6 +79,64 @@ export class OrderService {
         );
     }
 
+    async getOrdersBySession(userId:string,sessionId:string){
+        const session = await this.prisma.chatSession.findFirst({
+            where:{
+                id:sessionId,
+                userId
+            }
+        });
+
+        if(!session){
+            throw new NotFoundException('Chat session not found');
+        }
+
+        return this.prisma.order.findMany({
+            where:{
+                userId,
+                chatSessionId:sessionId,
+                isDelete:false
+            },
+            orderBy:{
+                createdAt:'desc'
+            }
+        });
+    }
+
+    async getSessionByOrder(userId:string,orderId:string){
+        const order = await this.prisma.order.findFirst({
+            where:{
+                id:orderId,
+                userId,
+                isDelete:false
+            },
+            include:{
+                chatSession:{
+                    include:{
+                        messages:{
+                            orderBy:{
+                                createdAt:'asc'
+                            },
+                            include:{
+                                attachments:true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if(!order){
+            throw new NotFoundException('Order not found');
+        }
+
+        if(!order.chatSession){
+            throw new NotFoundException('Order chat session not found');
+        }
+
+        return order.chatSession;
+    }
+
     async updateStatus(
         userId:string,
         orderId:string,
@@ -102,7 +160,7 @@ export class OrderService {
                 data.status
             );
 
-            return tx.order.update({
+            const updatedOrder = await tx.order.update({
                 where:{
                     id:orderId
                 },
@@ -124,6 +182,17 @@ export class OrderService {
                     : order.completedAt
                 }
             });
+
+            if(order.chatSessionId){
+                await this.createStatusChatMessage(
+                    tx,
+                    userId,
+                    order.chatSessionId,
+                    updatedOrder
+                );
+            }
+
+            return updatedOrder;
         });
     }
 
@@ -142,6 +211,202 @@ export class OrderService {
                 deleteAt:new Date()
             }
         });
+    }
+
+    async preparePendingOrderFromChat(
+        tx:Prisma.TransactionClient,
+        userId:string,
+        sessionId:string,
+        type:OrderType,
+        totalAmount:number,
+        bookingDetails:Record<string,unknown>
+    ){
+        const existingOrder = await tx.order.findFirst({
+            where:{
+                userId,
+                chatSessionId:sessionId,
+                type,
+                status:OrderStatus.PENDING_CONFIRM,
+                isDelete:false
+            },
+            orderBy:{
+                createdAt:'desc'
+            }
+        });
+
+        return existingOrder
+        ? tx.order.update({
+            where:{
+                id:existingOrder.id
+            },
+            data:{
+                type,
+                totalAmount,
+                bookingDetails:bookingDetails as Prisma.InputJsonValue
+            }
+        })
+        : tx.order.create({
+            data:{
+                userId,
+                chatSessionId:sessionId,
+                orderNo:this.createOrderNo(),
+                type,
+                status:OrderStatus.PENDING_CONFIRM,
+                totalAmount,
+                bookingDetails:bookingDetails as Prisma.InputJsonValue
+            }
+        });
+    }
+
+    async confirmFromChat(userId:string,orderId:string){
+        return this.prisma.$transaction(async (tx) => {
+            const order = await tx.order.findFirst({
+                where:{
+                    id:orderId,
+                    userId,
+                    isDelete:false
+                }
+            });
+
+            if(!order){
+                throw new NotFoundException('Order not found');
+            }
+
+            if(!order.chatSessionId){
+                throw new BadRequestException('Order is not linked to a chat session');
+            }
+
+            this.validateStatusChange(
+                order.status,
+                OrderStatus.PENDING_PAYMENT
+            );
+
+            const updatedOrder = await tx.order.update({
+                where:{
+                    id:orderId
+                },
+                data:{
+                    status:OrderStatus.PENDING_PAYMENT,
+                    confirmedAt:new Date()
+                }
+            });
+
+            const systemMessage = await tx.chatMessage.create({
+                data:{
+                    userId,
+                    sessionId:order.chatSessionId,
+                    role:ChatRole.SYSTEM,
+                    content:`Order ${order.orderNo} confirmed. Please continue to payment.`,
+                    metadata:{
+                        type:'ORDER_CONFIRMED',
+                        orderId:updatedOrder.id,
+                        orderNo:updatedOrder.orderNo,
+                        orderSnapshot:this.createOrderSnapshot(updatedOrder)
+                    } as Prisma.InputJsonValue
+                }
+            });
+
+            await tx.chatSession.update({
+                where:{
+                    id:order.chatSessionId
+                },
+                data:{
+                    updatedAt:new Date()
+                }
+            });
+
+            return {
+                order:updatedOrder,
+                message:systemMessage
+            };
+        });
+    }
+
+    async cancelFromChat(userId:string,orderId:string){
+        return this.prisma.$transaction(async (tx) => {
+            const order = await tx.order.findFirst({
+                where:{
+                    id:orderId,
+                    userId,
+                    isDelete:false
+                }
+            });
+
+            if(!order){
+                throw new NotFoundException('Order not found');
+            }
+
+            if(!order.chatSessionId){
+                throw new BadRequestException('Order is not linked to a chat session');
+            }
+
+            this.validateStatusChange(
+                order.status,
+                OrderStatus.CANCELED
+            );
+
+            const updatedOrder = await tx.order.update({
+                where:{
+                    id:orderId
+                },
+                data:{
+                    status:OrderStatus.CANCELED,
+                    canceledAt:new Date()
+                }
+            });
+
+            const systemMessage = await this.createCanceledChatMessage(
+                tx,
+                userId,
+                order.chatSessionId,
+                updatedOrder
+            );
+
+            await tx.chatSession.update({
+                where:{
+                    id:order.chatSessionId
+                },
+                data:{
+                    bookingDraft:Prisma.JsonNull,
+                    updatedAt:new Date()
+                }
+            });
+
+            return {
+                order:updatedOrder,
+                message:systemMessage
+            };
+        });
+    }
+
+    async payFromChat(
+        userId:string,
+        sessionId:string,
+        orderId:string
+    ){
+        return this.updateStatusFromChat(
+            userId,
+            sessionId,
+            orderId,
+            OrderStatus.PAID,
+            {
+                paymentMethod:'chat',
+                paymentNo:`PAY${Date.now()}`
+            }
+        );
+    }
+
+    async completeFromChat(
+        userId:string,
+        sessionId:string,
+        orderId:string
+    ){
+        return this.updateStatusFromChat(
+            userId,
+            sessionId,
+            orderId,
+            OrderStatus.COMPLETED
+        );
     }
 
     private async findOwnedOrder(userId:string,orderId:string){
@@ -189,5 +454,173 @@ export class OrderService {
     private createOrderNo(){
         const random = Math.random().toString(36).slice(2,8).toUpperCase();
         return `ORD${Date.now()}${random}`;
+    }
+
+    private async updateStatusFromChat(
+        userId:string,
+        sessionId:string,
+        orderId:string,
+        nextStatus:OrderStatus,
+        payment?:{
+            paymentMethod?:string;
+            paymentNo?:string;
+        }
+    ){
+        return this.prisma.$transaction(async (tx) => {
+            const order = await tx.order.findFirst({
+                where:{
+                    id:orderId,
+                    userId,
+                    chatSessionId:sessionId,
+                    isDelete:false
+                }
+            });
+
+            if(!order){
+                throw new NotFoundException('Order not found');
+            }
+
+            this.validateStatusChange(
+                order.status,
+                nextStatus
+            );
+
+            const updatedOrder = await tx.order.update({
+                where:{
+                    id:orderId
+                },
+                data:{
+                    status:nextStatus,
+                    paymentMethod:payment?.paymentMethod ?? order.paymentMethod,
+                    paymentNo:payment?.paymentNo ?? order.paymentNo,
+                    paidAt:nextStatus === OrderStatus.PAID
+                    ? new Date()
+                    : order.paidAt,
+                    completedAt:nextStatus === OrderStatus.COMPLETED
+                    ? new Date()
+                    : order.completedAt
+                }
+            });
+
+            const systemMessage = await this.createStatusChatMessage(
+                tx,
+                userId,
+                sessionId,
+                updatedOrder
+            );
+
+            return {
+                order:updatedOrder,
+                message:systemMessage
+            };
+        });
+    }
+
+    private async createStatusChatMessage(
+        tx:Prisma.TransactionClient,
+        userId:string,
+        sessionId:string,
+        order:any
+    ){
+        const statusMessageMap:Partial<Record<OrderStatus,{
+            type:string;
+            content:string;
+            clearDraft?:boolean;
+        }>> = {
+            PENDING_PAYMENT:{
+                type:'ORDER_CONFIRMED',
+                content:`Order ${order.orderNo} confirmed. Please continue to payment.`
+            },
+            PAID:{
+                type:'ORDER_PAID',
+                content:`Order ${order.orderNo} paid.`
+            },
+            CANCELED:{
+                type:'ORDER_CANCELED',
+                content:`Order ${order.orderNo} canceled.`,
+                clearDraft:true
+            },
+            COMPLETED:{
+                type:'ORDER_COMPLETED',
+                content:`Order ${order.orderNo} completed.`
+            }
+        };
+
+        const message = statusMessageMap[order.status];
+
+        if(!message){
+            return null;
+        }
+
+        const systemMessage = await tx.chatMessage.create({
+            data:{
+                userId,
+                sessionId,
+                role:ChatRole.SYSTEM,
+                content:message.content,
+                metadata:{
+                    type:message.type,
+                    orderId:order.id,
+                    orderNo:order.orderNo,
+                    orderSnapshot:this.createOrderSnapshot(order)
+                } as Prisma.InputJsonValue
+            }
+        });
+
+        await tx.chatSession.update({
+            where:{
+                id:sessionId
+            },
+            data:{
+                bookingDraft:message.clearDraft
+                ? Prisma.JsonNull
+                : undefined,
+                updatedAt:new Date()
+            }
+        });
+
+        return systemMessage;
+    }
+
+    private createCanceledChatMessage(
+        tx:Prisma.TransactionClient,
+        userId:string,
+        sessionId:string,
+        order:any
+    ){
+        return tx.chatMessage.create({
+            data:{
+                userId,
+                sessionId,
+                role:ChatRole.SYSTEM,
+                content:`Order ${order.orderNo} canceled.`,
+                metadata:{
+                    type:'ORDER_CANCELED',
+                    orderId:order.id,
+                    orderNo:order.orderNo,
+                    orderSnapshot:this.createOrderSnapshot(order)
+                } as Prisma.InputJsonValue
+            }
+        });
+    }
+
+    createOrderSnapshot(order:any){
+        return {
+            id:order.id,
+            orderNo:order.orderNo,
+            type:order.type,
+            status:order.status,
+            chatSessionId:order.chatSessionId,
+            totalAmount:Number(order.totalAmount),
+            bookingDetails:order.bookingDetails,
+            paymentMethod:order.paymentMethod,
+            paymentNo:order.paymentNo,
+            confirmedAt:order.confirmedAt?.toISOString?.() ?? order.confirmedAt,
+            paidAt:order.paidAt?.toISOString?.() ?? order.paidAt,
+            canceledAt:order.canceledAt?.toISOString?.() ?? order.canceledAt,
+            completedAt:order.completedAt?.toISOString?.() ?? order.completedAt,
+            createdAt:order.createdAt?.toISOString?.() ?? order.createdAt,
+            updatedAt:order.updatedAt?.toISOString?.() ?? order.updatedAt
+        };
     }
 }

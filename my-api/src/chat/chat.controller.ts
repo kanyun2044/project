@@ -85,4 +85,56 @@ export class ChatController {
             data
         );
     }
+
+    @Post(':sessionId/orders/:orderId/confirm')
+    confirmOrder(
+        @Req() request,
+        @Param('sessionId') sessionId:string,
+        @Param('orderId') orderId:string
+    ){
+        return this.chatService.confirmOrder(
+            request.user.sub,
+            sessionId,
+            orderId
+        );
+    }
+
+    @Post(':sessionId/orders/:orderId/cancel')
+    cancelOrder(
+        @Req() request,
+        @Param('sessionId') sessionId:string,
+        @Param('orderId') orderId:string
+    ){
+        return this.chatService.cancelOrder(
+            request.user.sub,
+            sessionId,
+            orderId
+        );
+    }
+
+    @Post(':sessionId/orders/:orderId/pay')
+    payOrder(
+        @Req() request,
+        @Param('sessionId') sessionId:string,
+        @Param('orderId') orderId:string
+    ){
+        return this.chatService.payOrder(
+            request.user.sub,
+            sessionId,
+            orderId
+        );
+    }
+
+    @Post(':sessionId/orders/:orderId/complete')
+    completeOrder(
+        @Req() request,
+        @Param('sessionId') sessionId:string,
+        @Param('orderId') orderId:string
+    ){
+        return this.chatService.completeOrder(
+            request.user.sub,
+            sessionId,
+            orderId
+        );
+    }
 }

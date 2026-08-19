@@ -32,6 +32,22 @@ export class OrderController {
         );
     }
 
+    @Get('session/:sessionId')
+    getOrdersBySession(@Req() request,@Param('sessionId') sessionId:string){
+        return this.orderService.getOrdersBySession(
+            request.user.sub,
+            sessionId
+        );
+    }
+
+    @Get(':id/session')
+    getSessionByOrder(@Req() request,@Param('id') id:string){
+        return this.orderService.getSessionByOrder(
+            request.user.sub,
+            id
+        );
+    }
+
     @Patch(':id/status')
     updateStatus(
         @Req() request,
@@ -42,6 +58,22 @@ export class OrderController {
             request.user.sub,
             id,
             data
+        );
+    }
+
+    @Post(':id/confirm-from-chat')
+    confirmFromChat(@Req() request,@Param('id') id:string){
+        return this.orderService.confirmFromChat(
+            request.user.sub,
+            id
+        );
+    }
+
+    @Post(':id/cancel-from-chat')
+    cancelFromChat(@Req() request,@Param('id') id:string){
+        return this.orderService.cancelFromChat(
+            request.user.sub,
+            id
         );
     }
 

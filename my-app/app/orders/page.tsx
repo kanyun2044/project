@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Alert,Avatar,Box,Button,Card,CardActions,CardContent,Chip,CircularProgress,Dialog,DialogActions,DialogContent,DialogTitle,ListItemIcon,Menu,MenuItem,Pagination,Paper,Snackbar,Stack,Tab,Table,TableBody,TableCell,TableHead,TableRow,Tabs,Typography,useMediaQuery,useTheme } from "@mui/material";
+import { Alert,Avatar,Backdrop,Box,Button,ButtonBase,Card,CardActions,CardContent,Chip,CircularProgress,ListItemIcon,Menu,MenuItem,Pagination,Paper,Snackbar,Stack,Tab,Table,TableBody,TableCell,TableHead,TableRow,Tabs,Typography,useMediaQuery,useTheme } from "@mui/material";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import LogoutIcon from "@mui/icons-material/Logout";
 import SwitchAccountIcon from "@mui/icons-material/SwitchAccount";
@@ -47,13 +47,33 @@ export default function OrdersPage() {
   const [cancelOrder, setCancelOrder] = React.useState<Order | null>(null);
   const [user, setUser] = React.useState<User | null>(null);
   const [userMenuAnchor, setUserMenuAnchor] = React.useState<HTMLElement | null>(null);
+  const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
+    setMounted(true);
     checkLogin();
   }, []);
 
   React.useEffect(() => {
     loadOrders();
+  }, [status, type, page]);
+
+  React.useEffect(() => {
+    function syncOrders() {
+      if (document.visibilityState === "visible") {
+        loadOrders(false);
+      }
+    }
+
+    window.addEventListener("focus", syncOrders);
+    window.addEventListener("pageshow", syncOrders);
+    document.addEventListener("visibilitychange", syncOrders);
+
+    return () => {
+      window.removeEventListener("focus", syncOrders);
+      window.removeEventListener("pageshow", syncOrders);
+      document.removeEventListener("visibilitychange", syncOrders);
+    };
   }, [status, type, page]);
 
   async function checkLogin() {
@@ -64,8 +84,10 @@ export default function OrdersPage() {
     }
   }
 
-  async function loadOrders() {
-    setLoading(true);
+  async function loadOrders(showLoading = true) {
+    if (showLoading) {
+      setLoading(true);
+    }
 
     try {
       const params = new URLSearchParams({
@@ -94,7 +116,9 @@ export default function OrdersPage() {
     } catch {
       setMessage("Unable to connect to the server");
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   }
 
@@ -180,6 +204,17 @@ export default function OrdersPage() {
             Pay
           </Button>
         )}
+
+        {order.status === "PAID" && (
+          <Button
+            size="small"
+            variant="contained"
+            color="success"
+            onClick={() => updateOrderStatus(order, "COMPLETED")}
+          >
+            Complete
+          </Button>
+        )}
       </Stack>
     );
   }
@@ -205,38 +240,33 @@ export default function OrdersPage() {
 
           <Stack direction="row" spacing={2} alignItems="center">
             {user && (
-              <Stack
-                component="button"
-                type="button"
-                direction="row"
-                spacing={1.25}
-                alignItems="center"
+              <ButtonBase
                 onClick={(event) => setUserMenuAnchor(event.currentTarget)}
                 sx={{
-                  border: 0,
-                  bgcolor: "transparent",
-                  p: 0,
-                  cursor: "pointer",
+                  borderRadius: 2,
+                  p: 0.5,
                   textAlign: "left",
                 }}
               >
-                <Avatar
-                  src={user.avatar || undefined}
-                  alt={user.username}
-                  sx={{ width: 40, height: 40 }}
-                >
-                  {user.username.slice(0, 1).toUpperCase()}
-                </Avatar>
+                <Stack direction="row" spacing={1.25} alignItems="center">
+                  <Avatar
+                    src={user.avatar || undefined}
+                    alt={user.username}
+                    sx={{ width: 40, height: 40 }}
+                  >
+                    {user.username.slice(0, 1).toUpperCase()}
+                  </Avatar>
 
-                <Box sx={{ display: { xs: "none", sm: "block" }, minWidth: 0 }}>
-                  <Typography noWrap fontWeight={700} fontSize={14}>
-                    {user.username}
-                  </Typography>
-                  <Typography noWrap color="text.secondary" fontSize={12}>
-                    {user.email}
-                  </Typography>
-                </Box>
-              </Stack>
+                  <Box sx={{ display: { xs: "none", sm: "block" }, minWidth: 0 }}>
+                    <Typography noWrap fontWeight={700} fontSize={14}>
+                      {user.username}
+                    </Typography>
+                    <Typography noWrap color="text.secondary" fontSize={12}>
+                      {user.email}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </ButtonBase>
             )}
 
             <Button
@@ -249,32 +279,34 @@ export default function OrdersPage() {
           </Stack>
         </Stack>
 
-        <Menu
-          anchorEl={userMenuAnchor}
-          open={Boolean(userMenuAnchor)}
-          onClose={() => setUserMenuAnchor(null)}
-          anchorOrigin={{
-            vertical: "bottom",
-            horizontal: "right",
-          }}
-          transformOrigin={{
-            vertical: "top",
-            horizontal: "right",
-          }}
-        >
-          <MenuItem onClick={handleSwitchAccount}>
-            <ListItemIcon>
-              <SwitchAccountIcon fontSize="small" />
-            </ListItemIcon>
-            Switch account
-          </MenuItem>
-          <MenuItem onClick={handleLogout}>
-            <ListItemIcon>
-              <LogoutIcon fontSize="small" />
-            </ListItemIcon>
-            Logout
-          </MenuItem>
-        </Menu>
+        {mounted && (
+          <Menu
+            anchorEl={userMenuAnchor}
+            open={Boolean(userMenuAnchor)}
+            onClose={() => setUserMenuAnchor(null)}
+            anchorOrigin={{
+              vertical: "bottom",
+              horizontal: "right",
+            }}
+            transformOrigin={{
+              vertical: "top",
+              horizontal: "right",
+            }}
+          >
+            <MenuItem onClick={handleSwitchAccount}>
+              <ListItemIcon>
+                <SwitchAccountIcon fontSize="small" />
+              </ListItemIcon>
+              Switch account
+            </MenuItem>
+            <MenuItem onClick={handleLogout}>
+              <ListItemIcon>
+                <LogoutIcon fontSize="small" />
+              </ListItemIcon>
+              Logout
+            </MenuItem>
+          </Menu>
+        )}
 
         <Paper sx={{ mb: 2, overflowX: "auto" }}>
           <Tabs
@@ -397,26 +429,50 @@ export default function OrdersPage() {
         )}
       </Box>
 
-      <Dialog open={Boolean(cancelOrder)} onClose={() => setCancelOrder(null)} fullWidth maxWidth="xs">
-        <DialogTitle>Cancel order?</DialogTitle>
-        <DialogContent>
-          <Typography color="text.secondary">
-            Are you sure you want to cancel this order?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCancelOrder(null)}>No</Button>
-          <Button color="error" variant="contained" onClick={handleConfirmCancel}>
-            Yes, cancel
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {mounted && (
+        <>
+          <Backdrop
+            open={Boolean(cancelOrder)}
+            sx={{
+              zIndex: 1300,
+              px: 2,
+            }}
+            onClick={() => setCancelOrder(null)}
+          >
+            {cancelOrder && (
+              <Paper
+                elevation={8}
+                sx={{
+                  width: "100%",
+                  maxWidth: 420,
+                  p: 3,
+                  borderRadius: 2,
+                }}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <Typography fontWeight={700} fontSize={18} sx={{ mb: 1 }}>
+                  Cancel order?
+                </Typography>
+                <Typography color="text.secondary" sx={{ mb: 3 }}>
+                  Are you sure you want to cancel this order?
+                </Typography>
+                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                  <Button onClick={() => setCancelOrder(null)}>No</Button>
+                  <Button color="error" variant="contained" onClick={handleConfirmCancel}>
+                    Yes, cancel
+                  </Button>
+                </Stack>
+              </Paper>
+            )}
+          </Backdrop>
 
-      <Snackbar open={Boolean(message)} autoHideDuration={3000} onClose={() => setMessage("")}>
-        <Alert severity="info" variant="filled" onClose={() => setMessage("")}>
-          {message}
-        </Alert>
-      </Snackbar>
+          <Snackbar open={Boolean(message)} autoHideDuration={3000} onClose={() => setMessage("")}>
+            <Alert severity="info" variant="filled" onClose={() => setMessage("")}>
+              {message}
+            </Alert>
+          </Snackbar>
+        </>
+      )}
     </Box>
   );
 }

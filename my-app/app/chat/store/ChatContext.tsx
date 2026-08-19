@@ -15,6 +15,10 @@ type ChatContextValue = {
   selectSession: (id: string) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
   sendMessage: (content: string, attachments?: ChatAttachment[]) => Promise<void>;
+  confirmOrder: (orderId: string) => Promise<void>;
+  payOrder: (orderId: string) => Promise<void>;
+  completeOrder: (orderId: string) => Promise<void>;
+  cancelOrder: (orderId: string) => Promise<void>;
   clearError: () => void;
   retryMessage: (messageId: string) => Promise<void>;
   
@@ -98,6 +102,28 @@ async function loadSessions() {
   loadSessions();
 }, []);
 
+React.useEffect(() => {
+  if (!activeSessionId || isGenerating) return;
+
+  async function syncActiveSession() {
+    const savedSessionId = localStorage.getItem("activeChatSessionId");
+
+    if (!savedSessionId || document.visibilityState !== "visible") {
+      return;
+    }
+
+    await reloadSessionMessages(savedSessionId);
+  }
+
+  window.addEventListener("focus", syncActiveSession);
+  document.addEventListener("visibilitychange", syncActiveSession);
+
+  return () => {
+    window.removeEventListener("focus", syncActiveSession);
+    document.removeEventListener("visibilitychange", syncActiveSession);
+  };
+}, [activeSessionId, isGenerating]);
+
 
     async function retryMessage(messageId: string) {
   const session = activeSession;
@@ -165,11 +191,17 @@ async function createSession(title?: string) {
 function normalizeMessage(message: any): ChatMessage {
   return {
     id: message.id,
-    role: message.role === "USER" ? "user" : "assistant",
+    role:
+      message.role === "USER"
+        ? "user"
+        : message.role === "SYSTEM"
+          ? "system"
+          : "assistant",
     content: message.content,
     createdAt: message.createdAt,
     status: "done",
     attachments: message.attachments ?? [],
+    metadata: message.metadata ?? null,
   };
 }
 
@@ -442,6 +474,117 @@ function normalizeSession(session: any): ChatSession {
   }
 }
 
+async function reloadSessionMessages(sessionId: string) {
+  const response = await apiFetch(`/chats/${sessionId}/messages`);
+
+  if (!response.ok) {
+    setErrorMessage("Unable to load messages");
+    return;
+  }
+
+  const data = await response.json();
+  const messages = data.map(normalizeMessage);
+
+  setSessions((prev) =>
+    prev.map((session) =>
+      session.id === sessionId
+        ? {
+            ...session,
+            messages,
+          }
+        : session,
+    ),
+  );
+}
+
+async function confirmOrder(orderId: string) {
+  if (!activeSession) return;
+
+  try {
+    const response = await apiFetch(
+      `/chats/${activeSession.id}/orders/${orderId}/confirm`,
+      {
+        method: "POST",
+      },
+    );
+
+    if (!response.ok) {
+      setErrorMessage("Unable to confirm order");
+      return;
+    }
+
+    await reloadSessionMessages(activeSession.id);
+  } catch {
+    setErrorMessage("Unable to connect to the server");
+  }
+}
+
+async function cancelOrder(orderId: string) {
+  if (!activeSession) return;
+
+  try {
+    const response = await apiFetch(
+      `/chats/${activeSession.id}/orders/${orderId}/cancel`,
+      {
+        method: "POST",
+      },
+    );
+
+    if (!response.ok) {
+      setErrorMessage("Unable to cancel order");
+      return;
+    }
+
+    await reloadSessionMessages(activeSession.id);
+  } catch {
+    setErrorMessage("Unable to connect to the server");
+  }
+}
+
+async function payOrder(orderId: string) {
+  if (!activeSession) return;
+
+  try {
+    const response = await apiFetch(
+      `/chats/${activeSession.id}/orders/${orderId}/pay`,
+      {
+        method: "POST",
+      },
+    );
+
+    if (!response.ok) {
+      setErrorMessage("Unable to pay order");
+      return;
+    }
+
+    await reloadSessionMessages(activeSession.id);
+  } catch {
+    setErrorMessage("Unable to connect to the server");
+  }
+}
+
+async function completeOrder(orderId: string) {
+  if (!activeSession) return;
+
+  try {
+    const response = await apiFetch(
+      `/chats/${activeSession.id}/orders/${orderId}/complete`,
+      {
+        method: "POST",
+      },
+    );
+
+    if (!response.ok) {
+      setErrorMessage("Unable to complete order");
+      return;
+    }
+
+    await reloadSessionMessages(activeSession.id);
+  } catch {
+    setErrorMessage("Unable to connect to the server");
+  }
+}
+
   return (
     <ChatContext.Provider
       value={{
@@ -455,6 +598,10 @@ function normalizeSession(session: any): ChatSession {
         selectSession,
         deleteSession,
         sendMessage,
+        confirmOrder,
+        payOrder,
+        completeOrder,
+        cancelOrder,
         clearError: () => setErrorMessage(""),
         retryMessage 
       }}
