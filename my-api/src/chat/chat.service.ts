@@ -54,6 +54,15 @@ export class ChatService {
                         createdAt:'desc'
                     },
                     take:1
+                },
+                orders:{
+                    where:{
+                        isDelete:false
+                    },
+                    select:{
+                        id:true
+                    },
+                    take:1
                 }
             }
         });

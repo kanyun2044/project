@@ -4,6 +4,7 @@ import * as React from "react";
 import { Alert,Backdrop,Box,Button,Card,CardContent,Chip,CircularProgress,Divider,Paper,Snackbar,Stack,Typography } from "@mui/material";
 import { Timeline,TimelineConnector,TimelineContent,TimelineDot,TimelineItem,TimelineSeparator } from "@mui/lab";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "../../lib/api";
 import { getStatusColor, statusLabels, typeLabels } from "../orderLabels";
@@ -144,6 +145,14 @@ export default function OrderDetailPage() {
     );
   }
 
+  function handleBackToChat() {
+    if (order?.chatSessionId) {
+      localStorage.setItem("activeChatSessionId", order.chatSessionId);
+    }
+
+    router.push("/chat");
+  }
+
   function renderBookingDetails() {
     if (!order) return null;
 
@@ -261,9 +270,27 @@ export default function OrderDetailPage() {
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#f7f7f8", p: { xs: 2, md: 4 } }}>
       <Box sx={{ maxWidth: 960, mx: "auto" }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => router.push("/orders")} sx={{ mb: 2 }}>
-          Back to orders
-        </Button>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          spacing={1}
+          sx={{ mb: 2 }}
+        >
+          <Button startIcon={<ArrowBackIcon />} onClick={() => router.push("/orders")}>
+            Back to orders
+          </Button>
+
+          {order.chatSessionId && (
+            <Button
+              variant="outlined"
+              startIcon={<ChatBubbleOutlineIcon />}
+              onClick={handleBackToChat}
+            >
+              View chat
+            </Button>
+          )}
+        </Stack>
 
         <Stack spacing={2}>
           <Card>

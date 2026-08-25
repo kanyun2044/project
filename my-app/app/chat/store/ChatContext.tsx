@@ -8,9 +8,11 @@ type ChatContextValue = {
   sessions: ChatSession[];
   activeSession: ChatSession | null;
   searchKeyword: string;
+  inputValue: string;
   isGenerating: boolean;
   errorMessage: string;
   setSearchKeyword: (value: string) => void;
+  setInputValue: (value: string) => void;
   createSession: (title?: string) => Promise<void>;
   selectSession: (id: string) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
@@ -30,6 +32,61 @@ function createId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function parseSseBlock(block: string) {
+  const lines = block.split(/\r?\n/);
+  let event = "message";
+  const dataLines: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith("event:")) {
+      event = line.slice(6).trim();
+    }
+
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice(5).trimStart());
+    }
+  }
+
+  const dataText = dataLines.join("\n");
+
+  return {
+    event,
+    data: dataText ? JSON.parse(dataText) : null,
+  };
+}
+
+async function readSseStream(
+  response: Response,
+  onEvent: (event: string, data: any) => void,
+) {
+  if (!response.body) {
+    throw new Error("Missing response stream");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    while (buffer.includes("\n\n")) {
+      const endIndex = buffer.indexOf("\n\n");
+      const block = buffer.slice(0, endIndex).trim();
+      buffer = buffer.slice(endIndex + 2);
+
+      if (block) {
+        const parsed = parseSseBlock(block);
+        onEvent(parsed.event, parsed.data);
+      }
+    }
+  }
+}
+
 const initialSession: ChatSession = {
   id: createId(),
   title: "New Chat",
@@ -42,6 +99,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [sessions, setSessions] = React.useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = React.useState("");
   const [searchKeyword, setSearchKeyword] = React.useState("");
+  const [inputValue, setInputValue] = React.useState("");
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState("");
   
@@ -205,13 +263,25 @@ function normalizeMessage(message: any): ChatMessage {
   };
 }
 
+function messageHasOrder(message: ChatMessage) {
+  const metadata = message.metadata;
+
+  return Boolean(
+    metadata?.orderSnapshot ||
+      (Array.isArray(metadata?.orderItems) && metadata.orderItems.length > 0),
+  );
+}
+
 function normalizeSession(session: any): ChatSession {
+  const messages = session.messages ? session.messages.map(normalizeMessage) : [];
+
   return {
     id: session.id,
     title: session.title,
     updatedAt: session.updatedAt,
-    messages: session.messages ? session.messages.map(normalizeMessage) : [],
+    messages,
     isCustomTitle: session.title !== "New chat",
+    hasOrder: Boolean(session.orders?.length) || messages.some(messageHasOrder),
   };
 }
 
@@ -357,7 +427,7 @@ function normalizeSession(session: any): ChatSession {
       ),
     );
 
-    const response = await apiFetch(`/chats/${sessionId}/messages`, {
+    const response = await apiFetch(`/chats/${sessionId}/messages/stream`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -372,75 +442,93 @@ function normalizeSession(session: any): ChatSession {
       throw new Error("Send failed");
     }
 
-    const data = await response.json();
-    const userMessage = normalizeMessage(data.userMessage);
-    const assistantMessage = normalizeMessage(data.assistantMessage);
-    const fullAnswer = assistantMessage.content;
+    let streamFailed = false;
 
-    setSessions((prev) =>
-      prev.map((session) =>
-        session.id === sessionId
-          ? {
-              ...session,
-              messages: session.messages.map((message) =>
-                message.id === userDraftMessage.id
-                  ? userMessage
-                  : message.id === assistantDraftMessage.id
-                    ? {
-                        ...assistantDraftMessage,
-                        content: "",
-                      }
-                    : message,
-              ),
-            }
-          : session,
-      ),
-    );
+    await readSseStream(response, (event, data) => {
+      if (event === "error") {
+        streamFailed = true;
+        return;
+      }
 
-    for (const char of fullAnswer) {
-      await new Promise((resolve) => setTimeout(resolve, 35));
+      if (event === "user") {
+        const userMessage = normalizeMessage(data);
 
-      setSessions((prev) =>
-        prev.map((session) =>
-          session.id === sessionId
-            ? {
-                ...session,
-                updatedAt: new Date().toISOString(),
-                messages: session.messages.map((message) =>
-                  message.id === assistantDraftMessage.id
-                    ? {
-                        ...message,
-                        content: message.content + char,
-                      }
-                    : message,
-                ),
-              }
-            : session,
-        ),
-      );
+        setSessions((prev) =>
+          prev.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  messages: session.messages.map((message) =>
+                    message.id === userDraftMessage.id
+                      ? userMessage
+                      : message,
+                  ),
+                }
+              : session,
+          ),
+        );
+      }
+
+      if (event === "delta") {
+        setSessions((prev) =>
+          prev.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  updatedAt: new Date().toISOString(),
+                  messages: session.messages.map((message) =>
+                    message.id === assistantDraftMessage.id
+                      ? {
+                          ...message,
+                          content: message.content + String(data?.content ?? ""),
+                        }
+                      : message,
+                  ),
+                }
+              : session,
+          ),
+        );
+      }
+
+      if (event === "done") {
+        const userMessage = normalizeMessage(data.userMessage);
+        const assistantMessage = normalizeMessage(data.assistantMessage);
+
+        setSessions((prev) =>
+          prev.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  title:
+                    session.messages.length === 0 && !session.isCustomTitle
+                      ? text.slice(0, 18)
+                      : session.title,
+                  hasOrder:
+                    session.hasOrder ||
+                    Boolean(
+                      assistantMessage.metadata?.orderSnapshot ||
+                        assistantMessage.metadata?.orderItems?.length,
+                    ),
+                  messages: session.messages.map((message) =>
+                    message.id === userDraftMessage.id
+                      ? userMessage
+                      : message.id === assistantDraftMessage.id
+                        ? {
+                            ...assistantMessage,
+                            status: "done",
+                          }
+                        : message,
+                  ),
+                }
+              : session,
+          ),
+        );
+      }
+    });
+
+    if (streamFailed) {
+      throw new Error("Send failed");
     }
-
-    setSessions((prev) =>
-      prev.map((session) =>
-        session.id === sessionId
-          ? {
-              ...session,
-              title:
-                session.messages.length === 0 && !session.isCustomTitle
-                  ? text.slice(0, 18)
-                  : session.title,
-              messages: session.messages.map((message) =>
-                message.id === assistantDraftMessage.id
-                  ? {
-                      ...assistantMessage,
-                      status: "done",
-                    }
-                  : message,
-              ),
-            }
-          : session,
-      ),
-    );
   } catch {
     setErrorMessage("Send message failed, please try again later.");
 
@@ -591,9 +679,11 @@ async function completeOrder(orderId: string) {
         sessions,
         activeSession,
         searchKeyword,
+        inputValue,
         isGenerating,
         errorMessage,
         setSearchKeyword,
+        setInputValue,
         createSession,
         selectSession,
         deleteSession,

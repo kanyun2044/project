@@ -13,13 +13,25 @@ type Props = {
 };
 
 export default function ChatInput({ centered = false }: Props) {
-  const [value, setValue] = React.useState("");
   const [files, setFiles] = React.useState<File[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
-  const { sendMessage, isGenerating, errorMessage, clearError } = useChat();
+  const textInputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const { sendMessage, inputValue, setInputValue, isGenerating, errorMessage, clearError } = useChat();
+
+  React.useEffect(() => {
+    function focusInput() {
+      textInputRef.current?.focus();
+    }
+
+    window.addEventListener("chat-input-focus", focusInput);
+
+    return () => {
+      window.removeEventListener("chat-input-focus", focusInput);
+    };
+  }, []);
 
   async function handleSend() {
-    const text = value.trim();
+    const text = inputValue.trim();
     if ((!text && files.length === 0) || isGenerating) return;
 
     try {
@@ -41,7 +53,7 @@ export default function ChatInput({ centered = false }: Props) {
         uploadedAttachments.push(await response.json());
       }
 
-      setValue("");
+      setInputValue("");
       setFiles([]);
       await sendMessage(text || "Sent attachments.", uploadedAttachments);
     } catch {
@@ -96,10 +108,11 @@ export default function ChatInput({ centered = false }: Props) {
           fullWidth
           multiline
           maxRows={6}
-          value={value}
+          value={inputValue}
+          inputRef={textInputRef}
           disabled={isGenerating}
           placeholder="send message to AI"
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => setInputValue(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
@@ -122,7 +135,7 @@ export default function ChatInput({ centered = false }: Props) {
               <InputAdornment position="end">
                 <IconButton
                   color="primary"
-                  disabled={(!value.trim() && files.length === 0) || isGenerating}
+                  disabled={(!inputValue.trim() && files.length === 0) || isGenerating}
                   onClick={handleSend}
                 >
                   <SendIcon />

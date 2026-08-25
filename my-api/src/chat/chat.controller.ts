@@ -1,6 +1,7 @@
-import { Body,Controller,Delete,Get,Param,Patch,Post,Req,UploadedFile,UseInterceptors } from '@nestjs/common';
+import { Body,Controller,Delete,Get,Param,Patch,Post,Req,Res,UploadedFile,UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
+import type { Response } from 'express';
 import { ChatService } from './chat.service';
 import { CreateChatSessionDto } from './dto/create-chat-session.dto';
 import { SendChatMessageDto } from './dto/send-chat-message.dto';
@@ -86,6 +87,64 @@ export class ChatController {
         );
     }
 
+    @Post(':id/messages/stream')
+    async sendMessageStream(
+        @Req() request,
+        @Param('id') id:string,
+        @Body() data:SendChatMessageDto,
+        @Res() response:Response
+    ){
+        response.setHeader('Content-Type','text/event-stream');
+        response.setHeader('Cache-Control','no-cache');
+        response.setHeader('Connection','keep-alive');
+
+        try {
+            const result = await this.chatService.sendMessage(
+                request.user.sub,
+                id,
+                data
+            );
+
+            response.write(
+                this.createSseEvent(
+                    'user',
+                    result.userMessage
+                )
+            );
+
+            for(const char of result.assistantMessage.content){
+                response.write(
+                    this.createSseEvent(
+                        'delta',
+                        {
+                            content:char
+                        }
+                    )
+                );
+
+                await new Promise((resolve) => setTimeout(resolve,25));
+            }
+
+            response.write(
+                this.createSseEvent(
+                    'done',
+                    result
+                )
+            );
+        } catch {
+            response.write(
+                this.createSseEvent(
+                    'error',
+                    {
+                        message:'Send message failed'
+                    }
+                )
+            );
+        } finally {
+            response.end();
+        }
+    }
+
     @Post(':sessionId/orders/:orderId/confirm')
     confirmOrder(
         @Req() request,
@@ -136,5 +195,14 @@ export class ChatController {
             sessionId,
             orderId
         );
+    }
+
+    private createSseEvent(event:string,data:unknown){
+        return [
+            `event: ${event}`,
+            `data: ${JSON.stringify(data)}`,
+            '',
+            ''
+        ].join('\n');
     }
 }

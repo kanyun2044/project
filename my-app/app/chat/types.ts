@@ -18,29 +18,25 @@ export type ChatMessage = {
   metadata?: ChatMessageMetadata | null;
 };
 
+export type ChatOrderSnapshot = {
+  id: string;
+  orderNo: string;
+  type: "FLIGHT" | "HOTEL";
+  status: string;
+  chatSessionId?: string | null;
+  totalAmount: number;
+  bookingDetails: Record<string, unknown>;
+};
+
 export type ChatMessageMetadata = {
   type?: "BOOKING_DRAFT" | "ORDER_PREVIEW" | "ORDER_CONFIRMED" | "ORDER_CANCELED" | string;
   orderId?: string;
   orderNo?: string;
-  orderSnapshot?: {
-    id: string;
-    orderNo: string;
-    type: "FLIGHT" | "HOTEL";
-    status: string;
-    totalAmount: number;
-    bookingDetails: Record<string, unknown>;
-  };
+  orderSnapshot?: ChatOrderSnapshot;
   orderItems?: Array<{
     orderId?: string;
     orderNo?: string;
-    orderSnapshot?: {
-      id: string;
-      orderNo: string;
-      type: "FLIGHT" | "HOTEL";
-      status: string;
-      totalAmount: number;
-      bookingDetails: Record<string, unknown>;
-    };
+    orderSnapshot?: ChatOrderSnapshot;
     booking?: {
       intent?: string;
       slots?: Record<string, unknown>;
@@ -62,4 +58,5 @@ export type ChatSession = {
   updatedAt: string;
   messages: ChatMessage[];
   isCustomTitle?: boolean;
+  hasOrder?: boolean;
 };

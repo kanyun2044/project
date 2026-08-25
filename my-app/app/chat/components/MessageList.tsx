@@ -1,38 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { Avatar, Box, Button, Chip, Paper, Stack, Typography } from "@mui/material";
+import { Avatar, Box, Button, Paper, Stack, Typography } from "@mui/material";
 import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useChat } from "../store/ChatContext";
-
-const statusLabels: Record<string, string> = {
-  PENDING_CONFIRM: "Pending confirmation",
-  PENDING_PAYMENT: "Pending payment",
-  PAID: "Paid",
-  CANCELED: "Canceled",
-  COMPLETED: "Completed",
-};
-
-const typeLabels: Record<string, string> = {
-  FLIGHT: "Flight",
-  HOTEL: "Hotel",
-};
-
-const detailLabels: Record<string, string> = {
-  from: "From",
-  to: "To",
-  date: "Date",
-  passenger: "Passengers",
-  city: "City",
-  checkIn: "Check in",
-  checkOut: "Check out",
-  guests: "Guests",
-  hotelName: "Hotel",
-  roomType: "Room",
-};
+import ChatOrderCard from "./ChatOrderCard";
+import { ChatOrderSnapshot } from "../types";
 
 const hiddenOrderStatusTypes = [
   "ORDER_CONFIRMED",
@@ -40,12 +16,6 @@ const hiddenOrderStatusTypes = [
   "ORDER_CANCELED",
   "ORDER_COMPLETED",
 ];
-
-function formatDetailValue(value: unknown) {
-  if (value === null || value === undefined || value === "") return "Missing";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
-}
 
 function getOrderItems(metadata: any) {
   if (Array.isArray(metadata?.orderItems) && metadata.orderItems.length > 0) {
@@ -65,10 +35,26 @@ function getOrderItems(metadata: any) {
   return [];
 }
 
+function createModifyText(order: ChatOrderSnapshot) {
+  const details = Object.entries(order.bookingDetails ?? {})
+    .filter(([key]) => key !== "totalAmount")
+    .map(([key, value]) => {
+      if (value === null || value === undefined || value === "") {
+        return `${key}: missing`;
+      }
+
+      return `${key}: ${String(value)}`;
+    })
+    .join(", ");
+
+  return `I want to modify order ${order.orderNo}. Current details: ${details}. Please change `;
+}
+
 export default function MessageList() {
   const {
     activeSession,
     retryMessage,
+    setInputValue,
     confirmOrder,
     payOrder,
     completeOrder,
@@ -248,126 +234,19 @@ export default function MessageList() {
 
                         if (!order) return null;
 
-                        const hasOrderPrice = Number(order.totalAmount ?? 0) > 0;
-                        const canConfirmOrder =
-                          orderId && order.status === "PENDING_CONFIRM" && hasOrderPrice;
-                        const canPayOrder = orderId && order.status === "PENDING_PAYMENT";
-                        const canCompleteOrder = orderId && order.status === "PAID";
-                        const canCancelOrder =
-                          orderId &&
-                          ["PENDING_CONFIRM", "PENDING_PAYMENT", "PAID"].includes(order.status);
-
                         return (
-                          <Paper
+                          <ChatOrderCard
                             key={orderId ?? index}
-                            variant="outlined"
-                            sx={{
-                              p: 1.5,
-                              borderRadius: 2,
-                              bgcolor: "#fff",
+                            order={order}
+                            onConfirm={() => orderId && confirmOrder(orderId)}
+                            onCancel={() => orderId && cancelOrder(orderId)}
+                            onPay={() => orderId && payOrder(orderId)}
+                            onComplete={() => orderId && completeOrder(orderId)}
+                            onModify={() => {
+                              setInputValue(createModifyText(order));
+                              window.dispatchEvent(new Event("chat-input-focus"));
                             }}
-                          >
-                            <Stack spacing={1}>
-                              <Stack direction="row" justifyContent="space-between" spacing={2}>
-                                <Box>
-                                  <Typography fontWeight={700} fontSize={14}>
-                                    {order.orderNo}
-                                  </Typography>
-                                  <Typography color="text.secondary" fontSize={13}>
-                                    {typeLabels[order.type] ?? order.type} -{" "}
-                                    {hasOrderPrice
-                                      ? `$${Number(order.totalAmount).toFixed(2)}`
-                                      : "Price pending"}
-                                  </Typography>
-                                </Box>
-
-                                <Chip
-                                  size="small"
-                                  label={statusLabels[order.status] ?? order.status}
-                                />
-                              </Stack>
-
-                              {order.bookingDetails && (
-                                <Box sx={{ display: "grid", gap: 0.5 }}>
-                                  {Object.entries(order.bookingDetails)
-                                    .filter(([key]) => key !== "totalAmount")
-                                    .map(([key, value]) => (
-                                      <Stack
-                                        key={key}
-                                        direction="row"
-                                        justifyContent="space-between"
-                                        spacing={2}
-                                      >
-                                        <Typography color="text.secondary" fontSize={12}>
-                                          {detailLabels[key] ?? key}
-                                        </Typography>
-                                        <Typography fontSize={12} fontWeight={500}>
-                                          {formatDetailValue(value)}
-                                        </Typography>
-                                      </Stack>
-                                    ))}
-                                </Box>
-                              )}
-
-                              <Stack
-                                direction="row"
-                                spacing={1}
-                                justifyContent="space-between"
-                                alignItems="center"
-                              >
-                                {!hasOrderPrice && order.status === "PENDING_CONFIRM" && (
-                                  <Typography color="text.secondary" fontSize={12}>
-                                    Add a price before confirming.
-                                  </Typography>
-                                )}
-
-                                <Stack direction="row" spacing={1} sx={{ ml: "auto" }}>
-                                  {canCancelOrder && (
-                                    <Button
-                                      size="small"
-                                      color="error"
-                                      onClick={() => cancelOrder(orderId)}
-                                    >
-                                      Cancel
-                                    </Button>
-                                  )}
-
-                                  {order.status === "PENDING_CONFIRM" && (
-                                    <Button
-                                      size="small"
-                                      variant="contained"
-                                      disabled={!canConfirmOrder}
-                                      onClick={() => confirmOrder(orderId)}
-                                    >
-                                      Confirm
-                                    </Button>
-                                  )}
-
-                                  {order.status === "PENDING_PAYMENT" && (
-                                    <Button
-                                      size="small"
-                                      variant="contained"
-                                      disabled={!canPayOrder}
-                                      onClick={() => payOrder(orderId)}
-                                    >
-                                      Pay
-                                    </Button>
-                                  )}
-
-                                  {order.status === "PAID" && (
-                                    <Button
-                                      size="small"
-                                      variant="contained"
-                                      disabled={!canCompleteOrder}
-                                      onClick={() => completeOrder(orderId)}
-                                    >
-                                      Complete
-                                    </Button>
-                                  )}
-                                </Stack>
-                              </Stack>
-                            </Stack>
-                          </Paper>
+                          />
                         );
                       })}
                     </Stack>

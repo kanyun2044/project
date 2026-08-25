@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
-import {Avatar,Box,Button,Divider,IconButton,List,ListItemButton,ListItemText,TextField,Typography,Dialog,DialogActions,DialogContent,DialogTitle,} from "@mui/material";
+import {Avatar,Box,Button,Chip,Divider,IconButton,List,ListItemButton,ListItemText,Stack,TextField,Typography,Dialog,DialogActions,DialogContent,DialogTitle,} from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import LoginIcon from "@mui/icons-material/Login";
 import LogoutIcon from "@mui/icons-material/Logout";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import SearchIcon from "@mui/icons-material/Search";
 import { useRouter } from "next/navigation";
 import { useChat } from "../store/ChatContext";
@@ -174,8 +175,31 @@ export default function ChatSidebar({ onClose }: Props) {
                   {session.title}
                 </Typography>
               }
-              secondary={mounted ? new Date(session.updatedAt).toLocaleString() : ""}
+              secondary={
+                <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}>
+                  <Typography noWrap fontSize={12} color="text.secondary">
+                    {mounted ? new Date(session.updatedAt).toLocaleString() : ""}
+                  </Typography>
+
+                  {session.hasOrder && (
+                    <Chip
+                      size="small"
+                      icon={<ReceiptLongIcon sx={{ fontSize: 12 }} />}
+                      label="Order"
+                      sx={{
+                        height: 20,
+                        fontSize: 11,
+                        "& .MuiChip-icon": {
+                          ml: 0.5,
+                          mr: -0.25,
+                        },
+                      }}
+                    />
+                  )}
+                </Stack>
+              }
               secondaryTypographyProps={{
+                component: "div",
                 noWrap: true,
                 fontSize: 12,
               }}
