@@ -19,10 +19,12 @@ model User {
   refreshToken String?
   updatedAt    DateTime  @updatedAt
   username     String
+  role         UserRole  @default(USER)
 
   chatSessions ChatSession[]
   chatMessages ChatMessage[]
   orders       Order[]
+  userStats    UserStats[]
 }
 
 model ChatSession {
@@ -40,15 +42,15 @@ model ChatSession {
 }
 
 model ChatMessage {
-  id          String      @id @default(uuid())
+  id          String           @id @default(uuid())
   role        ChatRole
   content     String
   metadata    Json?
   sessionId   String
-  session     ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session     ChatSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   userId      String
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt   DateTime    @default(now())
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime         @default(now())
   attachments ChatAttachment[]
 
   @@index([sessionId, createdAt])
@@ -75,15 +77,15 @@ enum ChatRole {
 }
 
 model Order {
-  id             String        @id @default(uuid())
+  id             String       @id @default(uuid())
   userId         String
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   chatSessionId  String?
-  chatSession    ChatSession?  @relation(fields: [chatSessionId], references: [id], onDelete: SetNull)
-  orderNo        String        @unique
+  chatSession    ChatSession? @relation(fields: [chatSessionId], references: [id], onDelete: SetNull)
+  orderNo        String       @unique
   type           OrderType
-  status         OrderStatus   @default(PENDING_CONFIRM)
-  totalAmount    Decimal       @db.Decimal(12, 2)
+  status         OrderStatus  @default(PENDING_CONFIRM)
+  totalAmount    Decimal      @db.Decimal(12, 2)
   bookingDetails Json
   paymentMethod  String?
   paymentNo      String?
@@ -91,10 +93,10 @@ model Order {
   paidAt         DateTime?
   canceledAt     DateTime?
   completedAt    DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
   deleteAt       DateTime?
-  isDelete       Boolean       @default(false)
+  isDelete       Boolean      @default(false)
 
   @@index([userId, createdAt])
   @@index([chatSessionId])
@@ -113,4 +115,33 @@ enum OrderStatus {
   PAID
   CANCELED
   COMPLETED
+}
+
+model UserStats {
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  statDate         DateTime  @db.Date
+  unit             StatsUnit @default(DAY)
+  chatSessionCount Int       @default(0)
+  messageCount     Int       @default(0)
+  orderCount       Int       @default(0)
+  orderAmount      Decimal   @default(0) @db.Decimal(14, 2)
+  conversionRate   Decimal   @default(0) @db.Decimal(7, 4)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([userId, statDate])
+  @@map("user_stats")
+}
+
+enum StatsUnit {
+  DAY
+  WEEK
+  MONTH
+}
+
+enum UserRole {
+  USER
+  MANAGER
 }

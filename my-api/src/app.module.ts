@@ -8,10 +8,20 @@ import { UserModule } from './user/user.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { ChatModule } from './chat/chat.module';
 import { OrderModule } from './order/order.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { StatsModule } from './stats/stats.module';
 
 
 @Module({
-  imports: [PrismaModule,AuthModule,UserModule,ChatModule,OrderModule],
+  imports: [
+    ScheduleModule.forRoot(),
+    PrismaModule,
+    AuthModule,
+    UserModule,
+    ChatModule,
+    OrderModule,
+    StatsModule
+  ],
 
   controllers: [AppController],
 

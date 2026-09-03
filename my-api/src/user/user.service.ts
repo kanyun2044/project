@@ -30,8 +30,8 @@ async getProfile(userId:string){
  }
 
 
- return {id:user.id,username:user.username,email:user.email,
-    phoneNumber:user.phoneNumber,avatar:user.avatar};
+  return {id:user.id,username:user.username,email:user.email,
+     phoneNumber:user.phoneNumber,avatar:user.avatar,role:user.role};
 
 }
 

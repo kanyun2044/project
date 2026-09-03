@@ -72,7 +72,7 @@ export class AuthService {
     
       
     
-  const payload = {sub:user.id,email:user.email};
+  const payload = {sub:user.id,email:user.email,role:user.role};
 
 
   const accessToken = this.jwtService.sign(payload,{expiresIn:'2h'});
@@ -86,7 +86,7 @@ export class AuthService {
 
 
 
-  return {user:{id:user.id, email:user.email, username:user.username
+  return {user:{id:user.id, email:user.email, username:user.username,role:user.role
     },
 
     accessToken,
@@ -119,7 +119,10 @@ export class AuthService {
       throw new UnauthorizedException("Invalid refreshToken");
     }
 
-    const newAccessToken = this.jwtService.sign({sub:user.id,email:user.email},{expiresIn:'2h'});
+    const newAccessToken = this.jwtService.sign(
+      {sub:user.id,email:user.email,role:user.role},
+      {expiresIn:'2h'}
+    );
     
     return{accessToken:newAccessToken};
   }
