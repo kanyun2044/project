@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import { ExecutionContext,ForbiddenException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { ManagerGuard } from './manager.guard';

@@ -1,18 +1,29 @@
-import { Test, TestingModule } from '@nestjs/testing';
+/// <reference types="jest" />
 import { AuthService } from './auth.service';
 
 describe('AuthService', () => {
-  let service: AuthService;
+    let service:AuthService;
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [AuthService],
-    }).compile();
+    beforeEach(() => {
+        const prisma = {
+            user:{
+                findUnique:jest.fn(),
+                create:jest.fn(),
+                update:jest.fn()
+            }
+        };
+        const jwtService = {
+            sign:jest.fn(),
+            verify:jest.fn()
+        };
 
-    service = module.get<AuthService>(AuthService);
-  });
+        service = new AuthService(
+            prisma as any,
+            jwtService as any
+        );
+    });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
-  });
+    it('is defined', () => {
+        expect(service).toBeDefined();
+    });
 });

@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import { StatsController } from './stats.controller';
 
 describe('StatsController', () => {

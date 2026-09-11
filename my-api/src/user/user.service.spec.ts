@@ -1,18 +1,22 @@
-import { Test, TestingModule } from '@nestjs/testing';
+/// <reference types="jest" />
 import { UserService } from './user.service';
 
 describe('UserService', () => {
-  let service: UserService;
+    let service:UserService;
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [UserService],
-    }).compile();
+    beforeEach(() => {
+        const prisma = {
+            user:{
+                findFirst:jest.fn(),
+                findUnique:jest.fn(),
+                update:jest.fn()
+            }
+        };
 
-    service = module.get<UserService>(UserService);
-  });
+        service = new UserService(prisma as any);
+    });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
-  });
+    it('is defined', () => {
+        expect(service).toBeDefined();
+    });
 });

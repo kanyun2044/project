@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import { Prisma,StatsUnit } from '@prisma/client';
 import { StatsService } from './stats.service';
 

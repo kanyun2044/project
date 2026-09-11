@@ -1,18 +1,10 @@
-/*import { Test, TestingModule } from '@nestjs/testing';
+/// <reference types="jest" />
 import { PrismaService } from './prisma.service';
 
 describe('PrismaService', () => {
-  let service: PrismaService;
+    it('is defined', () => {
+        const service = new PrismaService();
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [PrismaService],
-    }).compile();
-
-    service = module.get<PrismaService>(PrismaService);
-  });
-
-  it('should be defined', () => {
-    expect(service).toBeDefined();
-  });
-});*/
+        expect(service).toBeDefined();
+    });
+});

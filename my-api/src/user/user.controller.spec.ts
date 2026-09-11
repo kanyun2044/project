@@ -1,18 +1,26 @@
-import { Test, TestingModule } from '@nestjs/testing';
+/// <reference types="jest" />
 import { UserController } from './user.controller';
 
 describe('UserController', () => {
-  let controller: UserController;
+    let controller:UserController;
+    let userService:any;
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [UserController],
-    }).compile();
+    beforeEach(() => {
+        userService = {
+            getProfile:jest.fn()
+        };
+        controller = new UserController(userService);
+    });
 
-    controller = module.get<UserController>(UserController);
-  });
+    it('is defined', () => {
+        expect(controller).toBeDefined();
+    });
 
-  it('should be defined', () => {
-    expect(controller).toBeDefined();
-  });
+    it('loads the current user from the JWT context', () => {
+        controller.getProfile({
+            user:{sub:'user-1'}
+        });
+
+        expect(userService.getProfile).toHaveBeenCalledWith('user-1');
+    });
 });
