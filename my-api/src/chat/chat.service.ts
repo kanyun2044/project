@@ -857,13 +857,6 @@ export class ChatService {
         };
     }
 
-    private createMockAnswer(content:string){
-
-        return `This is a mock test for: "${content}". The real AI service can be connected here later.`;
-
-    }
-
-
     private async createAiAnswer(
         messages:{role:ChatRole;content:string}[],
         attachments:{fileUrl:string}[] = []
